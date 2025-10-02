@@ -1,10 +1,14 @@
 defmodule CPU do
-  def decode_file(bin) do
-    "bits 16\n\n" <> decode_bin(bin)
+  def decode_file(file) do
+    asm =
+      file
+      |> File.stream!(2)
+      |> Enum.map_join("\n", &decode_bin/1)
+
+    "bits 16\n\n" <> asm
   end
 
-  defp decode_bin(
-         <<opcode::6, d::size(1), w::size(1), 0b11::2, reg::3, r_m::3, rest::binary>> = all) do
+  defp decode_bin(<<opcode::6, _d::size(1), _w::size(1), _mod::2, _reg::3, _r_m::3>> = all) do
     {dest, source} = dest_source(all)
     op(opcode) <> " " <> dest <> ", " <> source
   end
@@ -33,7 +37,7 @@ defmodule CPU do
   defp reg(0b101, 0), do: "ch"
   defp reg(0b101, 1), do: "bp"
   defp reg(0b110, 0), do: "dh"
-  defp reg(0b110, 1), do: "sl"
+  defp reg(0b110, 1), do: "si"
   defp reg(0b111, 0), do: "bh"
   defp reg(0b111, 1), do: "di"
   defp reg(_, _), do: "idk"
@@ -41,8 +45,12 @@ defmodule CPU do
   defp op(0b100010), do: "mov"
   defp op(_), do: "idk man"
 
-  defp bits(bits, size) do
-    Integer.to_string(bits, 2) |> String.pad_leading(size, "0")
+  defp bits(bits) when is_integer(bits) do
+    Integer.to_string(bits, 2)
+  end
+
+  defp bits(bits) do
+    byte_size(bits)
   end
 end
 
@@ -81,11 +89,9 @@ end
 # of a memory operand and/or the actual value of
 # an immediate constant operand.
 
-[file | _] = System.argv() |> dbg()
+[file | _] = System.argv()
 
 IO.puts("Reading #{file}")
 
-bin = File.read!(file)
-
-CPU.decode_file(bin)
+CPU.decode_file(file)
 |> then(&File.write("#{file}_dave.asm", &1))

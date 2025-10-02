@@ -1,24 +1,55 @@
 defmodule CPU do
-  @opcodes %{0b100010 => "mov"}
-
-  def decode(<<one::binary-size(1), two::binary-size(1), _rest::binary>>) do
-    decode_first_byte(one)
+  def decode_file(bin) do
+    "bits 16\n\n" <> decode_bin(bin)
   end
+
+  defp decode_bin(
+         <<opcode::6, d::size(1), w::size(1), 0b11::2, reg::3, r_m::3, rest::binary>> = all) do
+    {dest, source} = dest_source(all)
+    op(opcode) <> " " <> dest <> ", " <> source
+  end
+
+  defp decode_bin(<<>>), do: ""
+
+  # d is 0. reg is source, r_m is dest
+  defp dest_source(<<_::6, 0::size(1), w::size(1), 0b11::2, reg::3, r_m::3>>),
+    do: {reg(r_m, w), reg(reg, w)}
+
+  defp dest_source(<<_::6, 1::size(1), w::size(1), 0b11::2, reg::3, r_m::3>>),
+    do: {reg(reg, w), reg(r_m, w)}
 
   def decode(_), do: dbg("nope")
 
-  defp decode_first_byte(<<opcode::6, d::size(1), w::size(1)>>) do
-    op = @opcodes[opcode]
-    dbg(op)
-    dbg(d)
-    dbg(w)
+  defp reg(0b000, 0), do: "al"
+  defp reg(0b000, 1), do: "ax"
+  defp reg(0b001, 0), do: "cl"
+  defp reg(0b001, 1), do: "cx"
+  defp reg(0b010, 0), do: "dl"
+  defp reg(0b010, 1), do: "dx"
+  defp reg(0b011, 0), do: "bl"
+  defp reg(0b011, 1), do: "bx"
+  defp reg(0b100, 0), do: "ah"
+  defp reg(0b100, 1), do: "sp"
+  defp reg(0b101, 0), do: "ch"
+  defp reg(0b101, 1), do: "bp"
+  defp reg(0b110, 0), do: "dh"
+  defp reg(0b110, 1), do: "sl"
+  defp reg(0b111, 0), do: "bh"
+  defp reg(0b111, 1), do: "di"
+  defp reg(_, _), do: "idk"
+
+  defp op(0b100010), do: "mov"
+  defp op(_), do: "idk man"
+
+  defp bits(bits, size) do
+    Integer.to_string(bits, 2) |> String.pad_leading(size, "0")
   end
 end
 
 # First Byte:
 # 6 bits opcode
 # then 1 bit `D` field - direction
-# 1  = REG field in second byte identifies the destination operand
+# 1  = REG field in second byte identifies the dination operand
 # 0  = REG field in secod byte identifies the source operand
 # W field - distinguishes between `byte` and `word` operations
 # 0 = byte
@@ -31,6 +62,7 @@ end
 # 01 Memory mode, 8 bit displacement follows
 # 10 Memory ode, 26 -bit displacement follows
 # 11 Register mode (no displacement)
+
 # REG field - 3 bits - used as an extension of the opcode toidentify the type of operation.
 ### REG wW=0 W=1
 # 000 AL AX
@@ -55,4 +87,5 @@ IO.puts("Reading #{file}")
 
 bin = File.read!(file)
 
-CPU.decode(bin)
+CPU.decode_file(bin)
+|> then(&File.write("#{file}_dave.asm", &1))

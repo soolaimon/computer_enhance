@@ -1,16 +1,47 @@
 defmodule CPU do
   def decode_file(file) do
-    asm =
-      file
-      |> File.stream!(2)
-      |> Enum.map_join("\n", &decode_bin/1)
+    # IF mod field is 11, 2 bytes total
+    # IF mod field is 01, 3 bytes total
+    # IF mod field is 10, 4 bytes total
 
-    "bits 16\n\n" <> asm
+    asm =
+      File.read!(file)
+      |> decode_bin()
+
+    "bits 16\n" <> asm
+    # handle = File.open!(file, [:read])
+    # {:ok, <<first, second>>} = :file.read(handle, 2) |> dbg()
+
+    # "bits 16\n\n" <> asm
   end
 
-  defp decode_bin(<<opcode::6, _d::size(1), _w::size(1), _mod::2, _reg::3, _r_m::3>> = all) do
-    {dest, source} = dest_source(all)
-    op(opcode) <> " " <> dest <> ", " <> source
+  # defp next_instruction(handle) do
+  #   {:ok, bytes} = :file.read(handle, 2)
+  # end
+
+  # get next bytes from mod
+  defp decode_bin(
+         <<opcode::6, _d::size(1), _w::size(1), 0b11::2, _reg::3, _r_m::3, _rest::binary>> = all
+       ) do
+    <<instruction::binary-size(2), rest::binary>> = all
+    {dest, source} = dest_source(instruction)
+    op(opcode) <> " " <> dest <> ", " <> source <> "\n" <> decode_bin(rest)
+  end
+
+  # MOD `01` - 1 more byte
+  defp decode_bin(
+         <<opcode::6, _d::size(1), _w::size(1), 0b01::2, _reg::3, _r_m::3, third::8,
+           rest::binary>>
+       ) do
+    "one more byte" <> "\n" <> decode_bin(rest)
+  end
+
+  # MOD `10` - 2 more bytes
+  defp decode_bin(
+         <<opcode::6, _d::size(1), _w::size(1), 0b10::2, _reg::3, _r_m::3, third::8, fourth::8,
+           rest::binary>>
+       ) do
+    "two more bytes" <> "\n" <> decode_bin(rest)
   end
 
   defp decode_bin(<<>>), do: ""
